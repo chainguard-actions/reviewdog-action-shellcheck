@@ -1,8 +1,0 @@
-{
-  "owner": "reviewdog",
-  "name": "action-shellcheck",
-  "alias": "reviewdog-action-shellcheck",
-  "visibility": "internal",
-  "description": "Run shellcheck with reviewdog",
-  "block_publish": false
-}
