@@ -1,6 +1,6 @@
 # reviewdog/action-shellcheck
 
-Run shellcheck with reviewdog
+🐶 Run shellcheck with reviewdog on pull requests to improve code review experience.
 
 Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at [https://github.com/reviewdog/action-shellcheck](https://github.com/reviewdog/action-shellcheck).
 
@@ -8,7 +8,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
-| v1.32.0 | [`v1.32.0`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/tree/v1.32.0) | — |
+| v1.32.0 | [`v1.32.0`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/tree/v1.32.0) | [`4c07458`](https://github.com/reviewdog/action-shellcheck/commit/4c07458293ac342d477251099501a718ae5ef86e) |
 
 ## Privacy
 
