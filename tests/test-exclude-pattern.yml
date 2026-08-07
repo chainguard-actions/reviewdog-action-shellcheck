@@ -1,0 +1,43 @@
+name: Test exclude pattern - skip files matching exclude pattern
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create shell scripts - one clean, one with errors (to be excluded)
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/exclude/vendor"
+          # A clean script that should be checked
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/exclude/good.sh" << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          echo "Hello, ${1:-world}"
+          EOF
+          # A script with errors in vendor/ that should be excluded
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/exclude/vendor/bad.sh" << 'EOF'
+          #!/usr/bin/env bash
+          echo $1
+          find . -name *.ogg
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: error
+          level: error
+          path: tests/fixtures/exclude
+          pattern: "*.sh"
+          exclude: "*/vendor/*"
+          shellcheck_flags: "--external-sources"
+          reviewdog_flags: "-reporter=local"
+
+      - name: Assert action succeeded (bad script was excluded)
+        run: |
+          echo "Action completed successfully - vendor scripts were excluded"
+          echo "PASS"

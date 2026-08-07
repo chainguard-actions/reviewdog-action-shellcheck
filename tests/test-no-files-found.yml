@@ -1,0 +1,31 @@
+name: Test no matching files found
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a directory with no shell scripts
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/nosh"
+          echo "This is a text file" > "$GITHUB_WORKSPACE/tests/fixtures/nosh/readme.txt"
+          echo "print('hello')" > "$GITHUB_WORKSPACE/tests/fixtures/nosh/script.py"
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: none
+          path: tests/fixtures/nosh
+          pattern: "*.sh"
+          shellcheck_flags: "--external-sources"
+          reviewdog_flags: "-reporter=local"
+
+      - name: Assert action succeeded (no files to check)
+        run: |
+          echo "Action completed successfully when no matching files found"
+          echo "PASS"

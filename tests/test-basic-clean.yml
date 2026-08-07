@@ -1,0 +1,34 @@
+name: Test basic usage - clean script
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a clean shell script with no issues
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/clean"
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/clean/good.sh" << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          echo "Hello, ${1:-world}"
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: error
+          path: tests/fixtures/clean
+          pattern: "*.sh"
+          shellcheck_flags: "--external-sources"
+          reviewdog_flags: "-reporter=local"
+
+      - name: Assert action succeeded
+        run: |
+          echo "Action completed successfully with no shellcheck errors"
+          echo "PASS"

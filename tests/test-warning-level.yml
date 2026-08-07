@@ -1,0 +1,37 @@
+name: Test warning level - fail_level=warning with a script that has warnings
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a shell script with shellcheck warnings (not errors)
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/warnings"
+          # SC2034 is a warning: variable appears unused
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/warnings/warn.sh" << 'EOF'
+          #!/usr/bin/env bash
+          # This script has a warning: unused variable (SC2034)
+          unused_var="hello"
+          echo "done"
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: none
+          level: warning
+          path: tests/fixtures/warnings
+          pattern: "*.sh"
+          shellcheck_flags: "--external-sources"
+          reviewdog_flags: "-reporter=local"
+
+      - name: Assert action succeeded with fail_level=none
+        run: |
+          echo "Action completed successfully with fail_level=none"
+          echo "PASS"

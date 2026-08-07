@@ -1,6 +1,11 @@
 {
   "owner": "reviewdog",
   "repo": "action-shellcheck",
-  "version": "",
-  "url": "https://github.com/reviewdog/action-shellcheck"
+  "version": "v1.32.1",
+  "commit_sha": "0722bbdb0d47f04c1b53b8734d2422ac63a45ec6",
+  "url": "https://github.com/reviewdog/action-shellcheck",
+  "policy_sha": "d636be7e43ef829af6e853da6b3c7566db9f72fe",
+  "test_policy_sha": "843adf9e4b8f85d0c08b27b9d0b09dd094b54702",
+  "test_agent_version": "2",
+  "harden_agent_version": "2"
 }
