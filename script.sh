@@ -58,33 +58,44 @@ while read -r pattern; do
 done <<< "${INPUT_EXCLUDE:-}"
 
 # Match all files matching the pattern
-mapfile -t files_with_pattern_array < <(find "${paths[@]}" "${excludes[@]}" -type f "${names[@]}")
+files_with_pattern=$(find "${paths[@]}" "${excludes[@]}" -type f "${names[@]}")
 
 # Match all files with a shebang (e.g. "#!/usr/bin/env zsh" or even "#!bash") in the first line of a file
 # Ignore files which match "$pattern" in order to avoid duplicates
-files_with_shebang_array=()
 if [ "${INPUT_CHECK_ALL_FILES_WITH_SHEBANGS}" = "true" ]; then
-  mapfile -t files_with_shebang_array < <(find "${paths[@]}" "${excludes[@]}" -not "${names[@]}" -type f -print0 | xargs -0 awk 'FNR==1 && /^#!.*sh/ { print FILENAME }')
+  files_with_shebang=$(find "${paths[@]}" "${excludes[@]}" -not "${names[@]}" -type f -print0 | xargs -0 awk 'FNR==1 && /^#!.*sh/ { print FILENAME }')
 fi
 
 # Exit early if no files have been found
-if [ "${#files_with_pattern_array[@]}" -eq 0 ] && [ "${#files_with_shebang_array[@]}" -eq 0 ]; then
+if [ -z "${files_with_pattern}" ] && [ -z "${files_with_shebang:-}" ]; then
   echo "No matching files found to check."
   exit 0
 fi
 
-# Combine file arrays safely
-FILES_ARRAY=("${files_with_pattern_array[@]}" "${files_with_shebang_array[@]}")
+# Tokenize the FILES list into an array (filenames may contain spaces)
+files_arr=()
+while IFS= read -r -d '' t; do files_arr+=("$t"); done \
+  < <(printf '%s\n' ${files_with_pattern} ${files_with_shebang:-} | xargs printf '%s\0')
 
-# Build safe arrays from input variables to prevent shell injection via word splitting
-# read -ra splits on whitespace only, preventing metacharacter injection
-read -ra SHELLCHECK_FLAGS_ARRAY <<< "${INPUT_SHELLCHECK_FLAGS:---external-sources}"
-read -ra REVIEWDOG_FLAGS_ARRAY <<< "${INPUT_REVIEWDOG_FLAGS:-}"
+# Tokenize shellcheck flags into an array
+_sc_flags_raw="${INPUT_SHELLCHECK_FLAGS:---external-sources}"
+sc_flags=()
+if [ -n "$_sc_flags_raw" ]; then
+  while IFS= read -r -d '' t; do sc_flags+=("$t"); done \
+    < <(printf '%s' "$_sc_flags_raw" | xargs printf '%s\0')
+fi
+
+# Tokenize reviewdog flags into an array
+rd_flags=()
+if [ -n "${INPUT_REVIEWDOG_FLAGS}" ]; then
+  while IFS= read -r -d '' t; do rd_flags+=("$t"); done \
+    < <(printf '%s' "${INPUT_REVIEWDOG_FLAGS}" | xargs printf '%s\0')
+fi
 
 echo '::group:: Running shellcheck ...'
 if [ "${INPUT_REPORTER}" = 'github-pr-review' ]; then
   # erroformat: https://git.io/JeGMU
-  shellcheck -f json "${SHELLCHECK_FLAGS_ARRAY[@]}" "${FILES_ARRAY[@]}" \
+  shellcheck -f json "${sc_flags[@]}" "${files_arr[@]}" \
     | jq -r '.[] | "\(.file):\(.line):\(.column):\(.level):\(.message) [SC\(.code)](https://github.com/koalaman/shellcheck/wiki/SC\(.code))"' \
     | reviewdog \
         -efm="%f:%l:%c:%t%*[^:]:%m" \
@@ -94,11 +105,11 @@ if [ "${INPUT_REPORTER}" = 'github-pr-review' ]; then
         -fail-level="${INPUT_FAIL_LEVEL}" \
         -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
         -level="${INPUT_LEVEL}" \
-        "${REVIEWDOG_FLAGS_ARRAY[@]}"
+        "${rd_flags[@]}"
   EXIT_CODE=$?
 else
   # github-pr-check,github-check (GitHub Check API) doesn't support markdown annotation.
-  shellcheck -f checkstyle "${SHELLCHECK_FLAGS_ARRAY[@]}" "${FILES_ARRAY[@]}" \
+  shellcheck -f checkstyle "${sc_flags[@]}" "${files_arr[@]}" \
     | reviewdog \
         -f="checkstyle" \
         -name="shellcheck" \
@@ -107,14 +118,14 @@ else
         -fail-level="${INPUT_FAIL_LEVEL}" \
         -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
         -level="${INPUT_LEVEL}" \
-        "${REVIEWDOG_FLAGS_ARRAY[@]}"
+        "${rd_flags[@]}"
   EXIT_CODE=$?
 fi
 echo '::endgroup::'
 
 echo '::group:: Running shellcheck (suggestion) ...'
 # -reporter must be github-pr-review for the suggestion feature.
-shellcheck -f diff "${FILES_ARRAY[@]}" \
+shellcheck -f diff "${files_arr[@]}" \
   | reviewdog \
       -name="shellcheck (suggestion)" \
       -f=diff \
@@ -123,7 +134,7 @@ shellcheck -f diff "${FILES_ARRAY[@]}" \
       -filter-mode="${INPUT_FILTER_MODE}" \
       -fail-level="${INPUT_FAIL_LEVEL}" \
       -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
-      "${REVIEWDOG_FLAGS_ARRAY[@]}"
+      "${rd_flags[@]}"
 EXIT_CODE_SUGGESTION=$?
 echo '::endgroup::'
 

@@ -1,0 +1,54 @@
+name: Test check_all_files_with_shebangs option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create files for shebang detection test
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/tmp-shebangs"
+          # A clean .sh file (matches pattern)
+          cat > "$GITHUB_WORKSPACE/tests/tmp-shebangs/clean.sh" << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          echo "clean script"
+          EOF
+          # A file without .sh extension but with a bash shebang and issues
+          cat > "$GITHUB_WORKSPACE/tests/tmp-shebangs/script-no-ext" << 'EOF'
+          #!/usr/bin/env bash
+          echo $1
+          EOF
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: warning
+          level: warning
+          path: tests/tmp-shebangs
+          pattern: "*.sh"
+          check_all_files_with_shebangs: "true"
+          shellcheck_flags: "--external-sources"
+          reviewdog_flags: "-reporter=local"
+
+      - name: Assert action detected issues in shebang file
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          # The non-.sh file with shebang has issues, so action should fail
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action correctly detected issues in file with shebang (no .sh extension)"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "FAIL: action should have detected issues in the shebang file"
+            exit 1
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

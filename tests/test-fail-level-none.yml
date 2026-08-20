@@ -1,0 +1,41 @@
+name: Test fail_level none - action succeeds even with issues
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a shell script with shellcheck issues
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/tmp-fail-none"
+          cat > "$GITHUB_WORKSPACE/tests/tmp-fail-none/bad.sh" << 'EOF'
+          #!/usr/bin/env bash
+          echo $1
+          find . -name *.ogg
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: none
+          path: tests/tmp-fail-none
+          pattern: "*.sh"
+          shellcheck_flags: "--external-sources"
+          reviewdog_flags: "-reporter=local"
+
+      - name: Assert action succeeded despite issues (fail_level=none)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded as expected with fail_level=none"
+          else
+            echo "FAIL: action should have succeeded with fail_level=none, got '$OUTCOME'"
+            exit 1
+          fi

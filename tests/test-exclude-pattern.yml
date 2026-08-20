@@ -1,0 +1,50 @@
+name: Test exclude pattern - excluded files are not checked
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create scripts where bad ones are excluded
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/tmp-exclude/vendor"
+          # A clean script in the main directory
+          cat > "$GITHUB_WORKSPACE/tests/tmp-exclude/clean.sh" << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          echo "clean script"
+          EOF
+          # A bad script in the vendor directory (should be excluded)
+          cat > "$GITHUB_WORKSPACE/tests/tmp-exclude/vendor/bad.sh" << 'EOF'
+          #!/usr/bin/env bash
+          echo $1
+          find . -name *.ogg
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: warning
+          level: warning
+          path: tests/tmp-exclude
+          pattern: "*.sh"
+          exclude: "*/vendor/*"
+          shellcheck_flags: "--external-sources"
+          reviewdog_flags: "-reporter=local"
+
+      - name: Assert action succeeded because bad script was excluded
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded because the bad script in vendor/ was excluded"
+          else
+            echo "FAIL: action should have succeeded with vendor/ excluded, got '$OUTCOME'"
+            exit 1
+          fi
