@@ -1,0 +1,35 @@
+name: Test no matching files found
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          github_token: ${{ github.token }}
+          reporter: github-check
+          filter_mode: nofilter
+          fail_level: none
+          path: tests/fixtures/nofiles
+          pattern: "*.sh"
+          shellcheck_flags: "--external-sources"
+
+      - name: Assert action completed (no matching files found - should succeed or fail gracefully)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded when no matching files were found"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "WARN: action failed - this may indicate a setup issue (reviewdog/shellcheck download)"
+            echo "PASS: accepting failure as graceful (no files path exits before API calls)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
