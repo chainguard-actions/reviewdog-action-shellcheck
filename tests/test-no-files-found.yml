@@ -1,0 +1,25 @@
+name: Test shellcheck with no matching files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: error
+          path: tests/fixtures/no-files
+          pattern: "*.sh"
+          shellcheck_flags: "--external-sources"
+          reviewdog_flags: "-reporter=local"
+
+      - name: Assert action succeeded with no files found
+        run: |
+          echo "Action completed successfully (no .sh files found, exited 0)"
+          echo "PASS"
