@@ -80,23 +80,22 @@ if [ ${#files[@]} -eq 0 ]; then
   exit 0
 fi
 
-echo '::group:: Running shellcheck ...'
-
-# Tokenize flag list inputs into arrays to prevent word-splitting injection
+# Tokenize INPUT_SHELLCHECK_FLAGS into an array (quote-aware, safe against injection)
 shellcheck_flags=()
-if [ -n "${INPUT_SHELLCHECK_FLAGS:-}" ]; then
+_sc_flags_input="${INPUT_SHELLCHECK_FLAGS:---external-sources}"
+if [ -n "$_sc_flags_input" ]; then
   while IFS= read -r -d '' t; do shellcheck_flags+=("$t"); done \
-    < <(printf '%s' "${INPUT_SHELLCHECK_FLAGS}" | xargs printf '%s\0')
-else
-  shellcheck_flags=('--external-sources')
+    < <(printf '%s' "$_sc_flags_input" | xargs printf '%s\0')
 fi
 
+# Tokenize INPUT_REVIEWDOG_FLAGS into an array (quote-aware, safe against injection)
 reviewdog_flags=()
-if [ -n "${INPUT_REVIEWDOG_FLAGS:-}" ]; then
+if [ -n "$INPUT_REVIEWDOG_FLAGS" ]; then
   while IFS= read -r -d '' t; do reviewdog_flags+=("$t"); done \
-    < <(printf '%s' "${INPUT_REVIEWDOG_FLAGS}" | xargs printf '%s\0')
+    < <(printf '%s' "$INPUT_REVIEWDOG_FLAGS" | xargs printf '%s\0')
 fi
 
+echo '::group:: Running shellcheck ...'
 if [ "${INPUT_REPORTER}" = 'github-pr-review' ]; then
   # erroformat: https://git.io/JeGMU
   shellcheck -f json "${shellcheck_flags[@]}" "${files[@]}" \

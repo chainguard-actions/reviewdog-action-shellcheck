@@ -10,25 +10,21 @@
 
 **Harden Agent Version:** `2`
 
-Action **reviewdog--action-shellcheck/v1.32.1** was hardened automatically. 1 finding(s) were identified and resolved across 2 iteration(s).
+Action **reviewdog--action-shellcheck/v1.32.1** was hardened automatically. 1 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-Sub-rule (b): Unquoted shell variable expansion of untrusted data. The action maps user-controlled inputs (inputs.shellcheck_flags, inputs.reviewdog_flags) into env vars INPUT_SHELLCHECK_FLAGS and INPUT_REVIEWDOG_FLAGS via the env: block in action.yml. These env vars are then expanded **unquoted** in script.sh in multiple places:
-- `shellcheck -f json  ${INPUT_SHELLCHECK_FLAGS:-'--external-sources'} ...` (line ~78)
-- `shellcheck -f checkstyle ${INPUT_SHELLCHECK_FLAGS:-'--external-sources'} ...` (line ~92)
-- `        ${INPUT_REVIEWDOG_FLAGS}` (lines ~87, ~100, ~112)
-An attacker-controlled value containing shell metacharacters (`;`, `|`, `&`, `$(...)`, etc.) in these inputs would be word-split and interpreted by the shell, enabling command injection.
+Sub-rule (b): script.sh expands `${INPUT_SHELLCHECK_FLAGS:-'--external-sources'}` and `${INPUT_REVIEWDOG_FLAGS}` unquoted in shell commands. These variables are populated from `inputs.shellcheck_flags` and `inputs.reviewdog_flags` (set in action.yml's `env:` block as `${{ inputs.shellcheck_flags }}` and `${{ inputs.reviewdog_flags }}`), making them workflow-controllable. Unquoted expansion allows an attacker to inject shell metacharacters (`;`, `|`, `&`, `$(...)`, etc.) into the command line. The `# shellcheck disable=SC2086` comments acknowledge the word-splitting intent but do not mitigate the injection risk. Offending lines: `shellcheck -f json  ${INPUT_SHELLCHECK_FLAGS:-'--external-sources'} ...` (line 74), `${INPUT_REVIEWDOG_FLAGS}` (lines 84, 96, 107), and `shellcheck -f checkstyle ${INPUT_SHELLCHECK_FLAGS:-'--external-sources'} ...` (line 88).
 
 Locations:
 
-- `script.sh:78`
-- `script.sh:87`
-- `script.sh:92`
-- `script.sh:100`
-- `script.sh:112`
+- `script.sh:74`
+- `script.sh:84`
+- `script.sh:88`
+- `script.sh:96`
+- `script.sh:107`
 
 ## Iteration Notes
 
@@ -38,17 +34,5 @@ Locations:
 
 **Notes:**
 
-Fixed unquoted expansion of INPUT_SHELLCHECK_FLAGS and INPUT_REVIEWDOG_FLAGS in script.sh. Both variables are now tokenized into bash arrays (shellcheck_flags and reviewdog_flags) using xargs printf '%s\0' with a NUL-delimited read loop, which provides quote-aware tokenization without allowing shell metacharacters to be interpreted. The arrays are then expanded safely as "${shellcheck_flags[@]}" and "${reviewdog_flags[@]}" in all three shellcheck invocations. The empty-input guard (if [ -n ... ]) prevents xargs from emitting spurious empty tokens. For shellcheck_flags, the default '--external-sources' is applied when the input is empty.
-
-### Iteration 2
-
-**Fixes applied:** missing-permissions
-
-**Notes:**
-
-Added top-level `permissions:` blocks to all four workflow files with minimum required scopes:
-- depup.yml: `contents: write`, `pull-requests: write` (needed to create dependency-update PRs)
-- release.yml: `contents: write`, `pull-requests: write` (needed to create releases, update tags, and read PR labels for bumpr)
-- reviewdog.yml: `contents: read`, `checks: write`, `pull-requests: write` (needed to post PR checks and review comments via reviewdog)
-- update_semver.yml: `contents: write` (needed to update major/minor semver tags)
+Fixed script.sh by tokenizing INPUT_SHELLCHECK_FLAGS and INPUT_REVIEWDOG_FLAGS into bash arrays using xargs quote-aware tokenization (the 'while IFS= read -r -d '' t; do arr+=("$t"); done < <(printf '%s' "$VAR" | xargs printf '%s\0')' pattern) before the pipeline commands. Both variables are now expanded safely as "${shellcheck_flags[@]}" and "${reviewdog_flags[@]}" in all 5 affected locations (lines 74, 84, 88, 96, 107 of the original). The default '--external-sources' for shellcheck_flags is applied via bash parameter expansion before tokenization. Guard conditions prevent xargs from emitting empty tokens on empty input. The # shellcheck disable=SC2086 comments were removed since the unquoted expansions are gone.
 
