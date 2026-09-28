@@ -72,30 +72,35 @@ if [ -z "${files_with_pattern}" ] && [ -z "${files_with_shebang:-}" ]; then
   exit 0
 fi
 
-# Tokenize the FILES list into an array (filenames may contain spaces)
-files_arr=()
-while IFS= read -r -d '' t; do files_arr+=("$t"); done \
-  < <(printf '%s\n' ${files_with_pattern} ${files_with_shebang:-} | xargs printf '%s\0')
+FILES="${files_with_pattern} ${files_with_shebang:-}"
 
-# Tokenize shellcheck flags into an array
-_sc_flags_raw="${INPUT_SHELLCHECK_FLAGS:---external-sources}"
-sc_flags=()
-if [ -n "$_sc_flags_raw" ]; then
-  while IFS= read -r -d '' t; do sc_flags+=("$t"); done \
-    < <(printf '%s' "$_sc_flags_raw" | xargs printf '%s\0')
+# Tokenize FILES (space-separated list of paths) into an array
+files=()
+if [ -n "${FILES}" ]; then
+  while IFS= read -r -d '' t; do files+=("$t"); done \
+    < <(printf '%s' "${FILES}" | xargs printf '%s\0')
 fi
 
-# Tokenize reviewdog flags into an array
-rd_flags=()
+# Tokenize INPUT_SHELLCHECK_FLAGS into an array (list of flags)
+shellcheck_flags=()
+_sc_flags_default='--external-sources'
+_sc_flags_input="${INPUT_SHELLCHECK_FLAGS:-${_sc_flags_default}}"
+if [ -n "${_sc_flags_input}" ]; then
+  while IFS= read -r -d '' t; do shellcheck_flags+=("$t"); done \
+    < <(printf '%s' "${_sc_flags_input}" | xargs printf '%s\0')
+fi
+
+# Tokenize INPUT_REVIEWDOG_FLAGS into an array (list of flags)
+reviewdog_flags=()
 if [ -n "${INPUT_REVIEWDOG_FLAGS}" ]; then
-  while IFS= read -r -d '' t; do rd_flags+=("$t"); done \
+  while IFS= read -r -d '' t; do reviewdog_flags+=("$t"); done \
     < <(printf '%s' "${INPUT_REVIEWDOG_FLAGS}" | xargs printf '%s\0')
 fi
 
 echo '::group:: Running shellcheck ...'
 if [ "${INPUT_REPORTER}" = 'github-pr-review' ]; then
   # erroformat: https://git.io/JeGMU
-  shellcheck -f json "${sc_flags[@]}" "${files_arr[@]}" \
+  shellcheck -f json "${shellcheck_flags[@]}" "${files[@]}" \
     | jq -r '.[] | "\(.file):\(.line):\(.column):\(.level):\(.message) [SC\(.code)](https://github.com/koalaman/shellcheck/wiki/SC\(.code))"' \
     | reviewdog \
         -efm="%f:%l:%c:%t%*[^:]:%m" \
@@ -105,11 +110,11 @@ if [ "${INPUT_REPORTER}" = 'github-pr-review' ]; then
         -fail-level="${INPUT_FAIL_LEVEL}" \
         -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
         -level="${INPUT_LEVEL}" \
-        "${rd_flags[@]}"
+        "${reviewdog_flags[@]}"
   EXIT_CODE=$?
 else
   # github-pr-check,github-check (GitHub Check API) doesn't support markdown annotation.
-  shellcheck -f checkstyle "${sc_flags[@]}" "${files_arr[@]}" \
+  shellcheck -f checkstyle "${shellcheck_flags[@]}" "${files[@]}" \
     | reviewdog \
         -f="checkstyle" \
         -name="shellcheck" \
@@ -118,14 +123,14 @@ else
         -fail-level="${INPUT_FAIL_LEVEL}" \
         -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
         -level="${INPUT_LEVEL}" \
-        "${rd_flags[@]}"
+        "${reviewdog_flags[@]}"
   EXIT_CODE=$?
 fi
 echo '::endgroup::'
 
 echo '::group:: Running shellcheck (suggestion) ...'
 # -reporter must be github-pr-review for the suggestion feature.
-shellcheck -f diff "${files_arr[@]}" \
+shellcheck -f diff "${files[@]}" \
   | reviewdog \
       -name="shellcheck (suggestion)" \
       -f=diff \
@@ -134,7 +139,7 @@ shellcheck -f diff "${files_arr[@]}" \
       -filter-mode="${INPUT_FILTER_MODE}" \
       -fail-level="${INPUT_FAIL_LEVEL}" \
       -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
-      "${rd_flags[@]}"
+      "${reviewdog_flags[@]}"
 EXIT_CODE_SUGGESTION=$?
 echo '::endgroup::'
 

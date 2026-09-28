@@ -16,20 +16,23 @@ Action **reviewdog--action-shellcheck/v1.32.0** was hardened automatically. 1 fi
 
 ### script-injection (severity: high)
 
-Rule (b) violation: In script.sh, multiple env vars sourced from workflow-controllable inputs are expanded unquoted in shell commands, allowing shell metacharacter injection. Specifically:
-- `${INPUT_SHELLCHECK_FLAGS:-'--external-sources'}` is unquoted in three `shellcheck` invocations (lines ~75, ~87, ~101)
-- `${INPUT_REVIEWDOG_FLAGS}` is unquoted as a trailing argument to `reviewdog` in three places (lines ~84, ~96, ~110)
-- `${FILES}` (built from `$INPUT_PATH`, `$INPUT_PATTERN`, `$INPUT_EXCLUDE`) is unquoted in three `shellcheck` invocations
-All of these variables are set from `inputs.*` values (e.g. `INPUT_SHELLCHECK_FLAGS: ${{ inputs.shellcheck_flags }}`, `INPUT_REVIEWDOG_FLAGS: ${{ inputs.reviewdog_flags }}`), which are workflow-controllable. An attacker-controlled input containing shell metacharacters (`;`, `|`, `&`, `$(...)`) would be interpreted by the shell.
+Rule (b) violation: In script.sh, multiple INPUT_* environment variables — which are set from user-controlled `inputs.*` values in action.yml — are expanded **unquoted** inside shell commands. Specifically:
+
+1. `shellcheck -f json  ${INPUT_SHELLCHECK_FLAGS:-'--external-sources'} ${FILES} \` (line ~75) — both `${INPUT_SHELLCHECK_FLAGS}` and `${FILES}` (derived from `INPUT_PATH`, `INPUT_PATTERN`, `INPUT_EXCLUDE`) are unquoted, allowing word-splitting and shell glob expansion of attacker-controlled values.
+2. `shellcheck -f checkstyle ${INPUT_SHELLCHECK_FLAGS:-'--external-sources'} ${FILES} \` (line ~88) — same issue.
+3. `shellcheck -f diff ${FILES} \` (line ~101) — `${FILES}` unquoted.
+4. `${INPUT_REVIEWDOG_FLAGS}` is passed unquoted as the final argument to `reviewdog` in all three invocation blocks (lines ~83, ~96, ~109).
+
+An attacker who controls any of `inputs.shellcheck_flags`, `inputs.reviewdog_flags`, `inputs.path`, `inputs.pattern`, or `inputs.exclude` can inject shell metacharacters (`;`, `|`, `&`, `$(...)`, etc.) to execute arbitrary commands. The `# shellcheck disable=SC2086` comments confirm the unquoted expansion is intentional but do not mitigate the injection risk.
 
 Locations:
 
 - `script.sh:75`
-- `script.sh:84`
-- `script.sh:87`
+- `script.sh:83`
+- `script.sh:88`
 - `script.sh:96`
 - `script.sh:101`
-- `script.sh:110`
+- `script.sh:109`
 
 ## Iteration Notes
 
@@ -39,9 +42,9 @@ Locations:
 
 **Notes:**
 
-Fixed script-injection in script.sh by tokenizing all three list-type inputs into bash arrays using xargs-based quote-aware tokenization:
-1. INPUT_SHELLCHECK_FLAGS (with default '--external-sources') → sc_flags array, expanded as "${sc_flags[@]}" in all 3 shellcheck invocations
-2. INPUT_REVIEWDOG_FLAGS → rd_flags array, expanded as "${rd_flags[@]}" in all 3 reviewdog invocations
-3. FILES (files_with_pattern + files_with_shebang) → files_arr array, expanded as "${files_arr[@]}" in all 3 shellcheck invocations
-All tokenizations use the safe pattern: guarded by 'if [ -n "$VAR" ]', NUL-delimited xargs pipeline, and IFS= read -r -d '' loop compatible with macOS bash 3.2. Removed the '# shellcheck disable=SC2086' comments that were suppressing warnings about the previously unquoted expansions.
+Fixed all unquoted variable expansions in script.sh by tokenizing list-style inputs into bash arrays using the xargs idiom:
+1. INPUT_SHELLCHECK_FLAGS → shellcheck_flags array (with default '--external-sources' fallback)
+2. FILES (space-separated file list from find) → files array
+3. INPUT_REVIEWDOG_FLAGS → reviewdog_flags array
+All three shellcheck invocations (json, checkstyle, diff formats) and all three reviewdog invocations now use properly quoted array expansions ("${arr[@]}"). The # shellcheck disable=SC2086 comments were removed as they are no longer needed.
 
