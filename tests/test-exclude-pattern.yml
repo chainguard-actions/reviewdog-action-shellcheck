@@ -1,0 +1,53 @@
+name: Test exclude pattern
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create shell scripts - one good, one bad (to be excluded)
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/exclude/vendor"
+          # Good script in main dir
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/exclude/good.sh" << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          echo "This is a clean script"
+          name="test"
+          echo "Name: ${name}"
+          EOF
+          # Bad script in vendor dir (should be excluded)
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/exclude/vendor/bad.sh" << 'EOF'
+          #!/usr/bin/env bash
+          echo $1
+          find . -name *.ogg
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: error
+          path: tests/fixtures/exclude
+          pattern: "*.sh"
+          exclude: "*/vendor/*"
+          shellcheck_flags: "--external-sources"
+
+      - name: Assert action succeeded because bad script was excluded
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded because the bad script in vendor/ was excluded"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "FAIL: action failed - the exclude pattern may not have worked"
+            exit 1
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

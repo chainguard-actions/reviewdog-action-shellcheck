@@ -1,0 +1,30 @@
+name: Test no matching files found
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a directory with no shell scripts
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/no-sh"
+          echo "This is a text file" > "$GITHUB_WORKSPACE/tests/fixtures/no-sh/readme.txt"
+          echo "This is a python file" > "$GITHUB_WORKSPACE/tests/fixtures/no-sh/script.py"
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: none
+          path: tests/fixtures/no-sh
+          pattern: "*.sh"
+          shellcheck_flags: "--external-sources"
+
+      - name: Assert action completed successfully with no matching files
+        run: |
+          echo "Action completed successfully when no matching files were found"
+          echo "PASS"

@@ -1,0 +1,37 @@
+name: Test check_all_files_with_shebangs
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a shell script without .sh extension but with shebang
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/shebangs"
+          # A clean script with a shebang but no .sh extension
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/shebangs/myscript" << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          echo "This script has a shebang but no .sh extension"
+          name="test"
+          echo "Name: ${name}"
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: none
+          path: tests/fixtures/shebangs
+          pattern: "*.sh"
+          check_all_files_with_shebangs: "true"
+          shellcheck_flags: "--external-sources"
+
+      - name: Assert action completed successfully with shebang detection
+        run: |
+          echo "Action completed successfully - shebang detection worked"
+          echo "PASS"

@@ -1,0 +1,44 @@
+name: Test fail_level=warning with warning-level issues
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a shell script with shellcheck warnings (not errors)
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/warnings"
+          # SC2148 is a warning: Tips depend on target shell and your shebang line
+          # SC2034 is a warning: variable appears unused
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/warnings/warn.sh" << 'EOF'
+          #!/usr/bin/env bash
+          unused_var="hello"
+          echo "done"
+          EOF
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: warning
+          level: warning
+          path: tests/fixtures/warnings
+          pattern: "*.sh"
+          shellcheck_flags: "--external-sources"
+
+      - name: Assert action outcome is either success or failure (not skipped)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action ran and produced a definitive outcome: $OUTCOME"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

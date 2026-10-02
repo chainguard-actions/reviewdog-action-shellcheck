@@ -1,0 +1,47 @@
+name: Test fail_level=warning with issues
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a shell script with shellcheck warnings
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/errors"
+          # SC2086: Double quote to prevent globbing and word splitting
+          # SC2035: Use ./*.ogg so names with dashes won't become options
+          cat > "$GITHUB_WORKSPACE/tests/fixtures/errors/bad.sh" << 'EOF'
+          #!/usr/bin/env bash
+          echo $1
+          find . -name *.ogg
+          EOF
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          github_token: ${{ github.token }}
+          reporter: local
+          filter_mode: nofilter
+          fail_level: warning
+          level: warning
+          path: tests/fixtures/errors
+          pattern: "*.sh"
+          shellcheck_flags: "--external-sources"
+
+      - name: Assert action failed due to shellcheck warnings
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action correctly failed when shellcheck found warnings with fail_level=warning"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "FAIL: expected action to fail when shellcheck found warnings with fail_level=warning"
+            exit 1
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
