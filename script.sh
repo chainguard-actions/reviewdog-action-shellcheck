@@ -57,50 +57,46 @@ while read -r pattern; do
     [[ -n ${pattern} ]] && excludes+=(-not -path "${pattern}")
 done <<< "${INPUT_EXCLUDE:-}"
 
-# Match all files matching the pattern
-files_with_pattern=$(find "${paths[@]}" "${excludes[@]}" -type f "${names[@]}")
+# Tokenize INPUT_SHELLCHECK_FLAGS into an array (quote-aware splitting)
+shellcheck_flags=()
+if [ -n "${INPUT_SHELLCHECK_FLAGS:-}" ]; then
+  while IFS= read -r -d '' t; do shellcheck_flags+=("$t"); done \
+    < <(printf '%s' "${INPUT_SHELLCHECK_FLAGS}" | xargs printf '%s\0')
+else
+  shellcheck_flags=('--external-sources')
+fi
+
+# Tokenize INPUT_REVIEWDOG_FLAGS into an array (quote-aware splitting)
+reviewdog_flags=()
+if [ -n "${INPUT_REVIEWDOG_FLAGS:-}" ]; then
+  while IFS= read -r -d '' t; do reviewdog_flags+=("$t"); done \
+    < <(printf '%s' "${INPUT_REVIEWDOG_FLAGS}" | xargs printf '%s\0')
+fi
+
+# Match all files matching the pattern — collect into an array
+files_array=()
+while IFS= read -r -d '' f; do
+  files_array+=("$f")
+done < <(find "${paths[@]}" "${excludes[@]}" -type f "${names[@]}" -print0)
 
 # Match all files with a shebang (e.g. "#!/usr/bin/env zsh" or even "#!bash") in the first line of a file
 # Ignore files which match "$pattern" in order to avoid duplicates
 if [ "${INPUT_CHECK_ALL_FILES_WITH_SHEBANGS}" = "true" ]; then
-  files_with_shebang=$(find "${paths[@]}" "${excludes[@]}" -not "${names[@]}" -type f -print0 | xargs -0 awk 'FNR==1 && /^#!.*sh/ { print FILENAME }')
+  while IFS= read -r f; do
+    [[ -n "$f" ]] && files_array+=("$f")
+  done < <(find "${paths[@]}" "${excludes[@]}" -not "${names[@]}" -type f -print0 | xargs -0 awk 'FNR==1 && /^#!.*sh/ { print FILENAME }')
 fi
 
 # Exit early if no files have been found
-if [ -z "${files_with_pattern}" ] && [ -z "${files_with_shebang:-}" ]; then
+if [ "${#files_array[@]}" -eq 0 ]; then
   echo "No matching files found to check."
   exit 0
-fi
-
-FILES="${files_with_pattern} ${files_with_shebang:-}"
-
-# Tokenize FILES (space-separated list of paths) into an array
-files=()
-if [ -n "${FILES}" ]; then
-  while IFS= read -r -d '' t; do files+=("$t"); done \
-    < <(printf '%s' "${FILES}" | xargs printf '%s\0')
-fi
-
-# Tokenize INPUT_SHELLCHECK_FLAGS into an array (list of flags)
-shellcheck_flags=()
-_sc_flags_default='--external-sources'
-_sc_flags_input="${INPUT_SHELLCHECK_FLAGS:-${_sc_flags_default}}"
-if [ -n "${_sc_flags_input}" ]; then
-  while IFS= read -r -d '' t; do shellcheck_flags+=("$t"); done \
-    < <(printf '%s' "${_sc_flags_input}" | xargs printf '%s\0')
-fi
-
-# Tokenize INPUT_REVIEWDOG_FLAGS into an array (list of flags)
-reviewdog_flags=()
-if [ -n "${INPUT_REVIEWDOG_FLAGS}" ]; then
-  while IFS= read -r -d '' t; do reviewdog_flags+=("$t"); done \
-    < <(printf '%s' "${INPUT_REVIEWDOG_FLAGS}" | xargs printf '%s\0')
 fi
 
 echo '::group:: Running shellcheck ...'
 if [ "${INPUT_REPORTER}" = 'github-pr-review' ]; then
   # erroformat: https://git.io/JeGMU
-  shellcheck -f json "${shellcheck_flags[@]}" "${files[@]}" \
+  shellcheck -f json "${shellcheck_flags[@]}" "${files_array[@]}" \
     | jq -r '.[] | "\(.file):\(.line):\(.column):\(.level):\(.message) [SC\(.code)](https://github.com/koalaman/shellcheck/wiki/SC\(.code))"' \
     | reviewdog \
         -efm="%f:%l:%c:%t%*[^:]:%m" \
@@ -114,7 +110,7 @@ if [ "${INPUT_REPORTER}" = 'github-pr-review' ]; then
   EXIT_CODE=$?
 else
   # github-pr-check,github-check (GitHub Check API) doesn't support markdown annotation.
-  shellcheck -f checkstyle "${shellcheck_flags[@]}" "${files[@]}" \
+  shellcheck -f checkstyle "${shellcheck_flags[@]}" "${files_array[@]}" \
     | reviewdog \
         -f="checkstyle" \
         -name="shellcheck" \
@@ -130,7 +126,7 @@ echo '::endgroup::'
 
 echo '::group:: Running shellcheck (suggestion) ...'
 # -reporter must be github-pr-review for the suggestion feature.
-shellcheck -f diff "${files[@]}" \
+shellcheck -f diff "${files_array[@]}" \
   | reviewdog \
       -name="shellcheck (suggestion)" \
       -f=diff \
