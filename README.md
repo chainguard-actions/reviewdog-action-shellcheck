@@ -14,6 +14,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v1.34.0 | [`v1.34.0`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/tree/v1.34.0) | [`0a90156`](https://github.com/reviewdog/action-shellcheck/commit/0a90156c6e0553996a217f0a9e09be6b0f6bee4c) | [`HARDENING.md`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/blob/v1.34.0/HARDENING.md) |
 | v1.34.1 | [`v1.34.1`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/tree/v1.34.1) | [`d0b8d5f`](https://github.com/reviewdog/action-shellcheck/commit/d0b8d5fd7fad6afdb6e1b6ce1778892be4d1f427) | [`HARDENING.md`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/blob/v1.34.1/HARDENING.md) |
 | v1.35.0 | [`v1.35.0`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/tree/v1.35.0) | [`b4ffc0b`](https://github.com/reviewdog/action-shellcheck/commit/b4ffc0b2a69f857f82b74d1310cd3e62e932f9f7) | [`HARDENING.md`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/blob/v1.35.0/HARDENING.md) |
+| v1.35.1 | [`v1.35.1`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/tree/v1.35.1) | [`950c9d7`](https://github.com/reviewdog/action-shellcheck/commit/950c9d71535c8c49e5c029c33a438ade63b9009c) | [`HARDENING.md`](https://github.com/chainguard-actions/reviewdog-action-shellcheck/blob/v1.35.1/HARDENING.md) |
 
 ## Privacy
 
