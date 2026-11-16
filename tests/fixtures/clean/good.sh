@@ -1,4 +1,0 @@
-#!/bin/bash
-set -eu
-name="${1:-world}"
-echo "Hello, ${name}"
