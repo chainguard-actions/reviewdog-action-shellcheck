@@ -82,25 +82,18 @@ if [ ${#files[@]} -eq 0 ]; then
   exit 0
 fi
 
-# Tokenize flag inputs into arrays (quote-aware, safe against metacharacters)
-shellcheck_flags=()
-_sc_default='--external-sources'
-_sc_input="${INPUT_SHELLCHECK_FLAGS:-${_sc_default}}"
-if [ -n "$_sc_input" ]; then
-  while IFS= read -r -d '' t; do shellcheck_flags+=("$t"); done \
-    < <(printf '%s' "$_sc_input" | xargs printf '%s\0')
-fi
-
-reviewdog_flags=()
-if [ -n "${INPUT_REVIEWDOG_FLAGS}" ]; then
-  while IFS= read -r -d '' t; do reviewdog_flags+=("$t"); done \
-    < <(printf '%s' "${INPUT_REVIEWDOG_FLAGS}" | xargs printf '%s\0')
-fi
+# Split flag inputs into arrays exactly as upstream's unquoted expansion did
+# (whitespace split + glob, quotes kept literal). Nothing inside the value is
+# evaluated: no command substitution or variable expansion occurs.
+# shellcheck disable=SC2206
+shellcheck_flags=(${INPUT_SHELLCHECK_FLAGS:---external-sources})
+# shellcheck disable=SC2206
+reviewdog_flags=(${INPUT_REVIEWDOG_FLAGS:-})
 
 echo '::group:: Running shellcheck ...'
 if [ "${INPUT_REPORTER}" = 'github-pr-review' ]; then
   # erroformat: https://git.io/JeGMU
-  shellcheck -f json "${shellcheck_flags[@]}" "${files[@]}" \
+  shellcheck -f json ${shellcheck_flags[@]+"${shellcheck_flags[@]}"} "${files[@]}" \
     | jq -r '.[] | "\(.file):\(.line):\(.column):\(.level):\(.message) [SC\(.code)](https://github.com/koalaman/shellcheck/wiki/SC\(.code))"' \
     | reviewdog \
         -efm="%f:%l:%c:%t%*[^:]:%m" \
@@ -110,11 +103,11 @@ if [ "${INPUT_REPORTER}" = 'github-pr-review' ]; then
         -fail-level="${INPUT_FAIL_LEVEL}" \
         -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
         -level="${INPUT_LEVEL}" \
-        "${reviewdog_flags[@]}"
+        ${reviewdog_flags[@]+"${reviewdog_flags[@]}"}
   EXIT_CODE=$?
 else
   # github-pr-check,github-check (GitHub Check API) doesn't support markdown annotation.
-  shellcheck -f checkstyle "${shellcheck_flags[@]}" "${files[@]}" \
+  shellcheck -f checkstyle ${shellcheck_flags[@]+"${shellcheck_flags[@]}"} "${files[@]}" \
     | reviewdog \
         -f="checkstyle" \
         -name="shellcheck" \
@@ -123,7 +116,7 @@ else
         -fail-level="${INPUT_FAIL_LEVEL}" \
         -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
         -level="${INPUT_LEVEL}" \
-        "${reviewdog_flags[@]}"
+        ${reviewdog_flags[@]+"${reviewdog_flags[@]}"}
   EXIT_CODE=$?
 fi
 echo '::endgroup::'
@@ -139,7 +132,7 @@ shellcheck -f diff "${files[@]}" \
       -filter-mode="${INPUT_FILTER_MODE}" \
       -fail-level="${INPUT_FAIL_LEVEL}" \
       -fail-on-error="${INPUT_FAIL_ON_ERROR}" \
-      "${reviewdog_flags[@]}"
+      ${reviewdog_flags[@]+"${reviewdog_flags[@]}"}
 EXIT_CODE_SUGGESTION=$?
 echo '::endgroup::'
 
