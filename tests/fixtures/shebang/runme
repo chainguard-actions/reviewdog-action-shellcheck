@@ -1,6 +1,0 @@
-#!/bin/bash
-# Intentionally broken script without .sh extension.
-foo=$1
-echo $foo
-if [ "$foo" = "x" ]; then
-  echo "missing fi"
